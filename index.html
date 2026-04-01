@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marathon Timer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap');
+
+        /* General Reset & Body */
+        body {
+            font-family: 'Montserrat', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #555;
+            background-color: #ffffff;
+        }
+
+        /* ----- SETUP VIEW STYLES ----- */
+        #setup-view {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+            padding-top: 30px;
+        }
+
+        h1 {
+            font-weight: 300;
+            letter-spacing: 4px;
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        /* Navigation Bar */
+        .nav-container {
+            border-bottom: 1px solid #ccc;
+            margin-bottom: 50px;
+            padding-bottom: 0px;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .nav li {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #333;
+            cursor: pointer;
+            padding-bottom: 10px;
+            transition: color 0.2s;
+        }
+
+        .nav li:hover {
+            color: #5a9bd4;
+        }
+
+        .nav li.active {
+            border-bottom: 3px solid #555;
+            margin-bottom: -2px;
+        }
+
+        /* Special style for the Widget link */
+        #btn-open-widget {
+            color: #5a9bd4;
+        }
+
+        /* Input Sections */
+        .section-title {
+            font-weight: 400;
+            font-size: 14px;
+            letter-spacing: 2px;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .input-group-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .input-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .input-box input {
+            width: 50px;
+            height: 35px;
+            text-align: left;
+            padding-left: 10px;
+            font-size: 14px;
+            font-family: 'Montserrat', sans-serif;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+            outline: none;
+        }
+
+        .input-box input:focus {
+            border-color: #5a9bd4;
+        }
+
+        .input-box label {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #333;
+        }
+
+        /* Secondary Button (For setting base time) */
+        .btn-secondary {
+            background-color: transparent;
+            color: #555;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 8px 24px;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            margin-bottom: 50px;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background-color: #f0f0f0;
+            border-color: #999;
+        }
+
+        /* Dropdown for Add/Reduce */
+        .action-select {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 12px;
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            outline: none;
+            color: #555;
+        }
+
+        /* Blue Button */
+        .btn-update-timer {
+            background-color: #5a9bd4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 12px 40px;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-bottom: 40px;
+        }
+
+        .btn-update-timer:hover {
+            background-color: #4a8bc4;
+        }
+
+        /* ----- TIMER VIEW STYLES ----- */
+        #timer-view {
+            display: none;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: transparent;
+        }
+
+        #countdown-display {
+            font-size: 12vw;
+            font-weight: 600;
+            color: #ffffff;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="setup-view">
+        <h1>MARATHON TIMER</h1>
+
+        <div class="nav-container">
+            <ul class="nav">
+                <li>&lt; ADD TIME</li>
+                <li class="active">SET TIMER</li>
+                <li>FONT SETTINGS</li>
+                <li>CONNECT STREAMLABS</li>
+                <li id="btn-open-widget">TIMER WIDGET</li>
+                <li>LOGOU &gt;</li>
+            </ul>
+        </div>
+
+        <div class="section-title">SET THE STARTING TIME:</div>
+        <div class="input-group-container">
+            <div class="input-box">
+                <input type="number" id="start-hours" value="15" min="0">
+                <label>Hours</label>
+            </div>
+            <div class="input-box">
+                <input type="number" id="start-minutes" value="0" min="0" max="59">
+                <label>Minutes</label>
+            </div>
+            <div class="input-box">
+                <input type="number" id="start-seconds" value="0" min="0" max="59">
+                <label>Seconds</label>
+            </div>
+        </div>
+        <button class="btn-secondary" id="btn-start-fresh">START NEW TIMER</button>
+
+        <div class="section-title">ADD OR REDUCE TIME (+ / -):</div>
+
+        <select id="time-action" class="action-select">
+            <option value="add">Add Time (+)</option>
+            <option value="subtract">Reduce Time (-)</option>
+        </select>
+
+        <div class="input-group-container">
+            <div class="input-box">
+                <input type="number" id="mod-hours" value="0" min="0">
+                <label>Hours</label>
+            </div>
+            <div class="input-box">
+                <input type="number" id="mod-minutes" value="0" min="0">
+                <label>Minutes</label>
+            </div>
+            <div class="input-box">
+                <input type="number" id="mod-seconds" value="0" min="0">
+                <label>Seconds</label>
+            </div>
+        </div>
+
+        <button class="btn-update-timer" id="btn-update-timer">UPDATE TIMER</button>
+    </div>
+
+
+    <div id="timer-view" style="display: none;">
+        <div id="countdown-display">00:00:00</div>
+    </div>
+
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const isTimerMode = urlParams.get('mode') === 'timer';
+
+        const setupView = document.getElementById('setup-view');
+        const timerView = document.getElementById('timer-view');
+        const display = document.getElementById('countdown-display');
+
+        let timerInterval;
+
+        if (isTimerMode) {
+            // --- TIMER TAB MODE ---
+            setupView.style.display = 'none';
+            timerView.style.display = 'flex';
+            document.body.style.backgroundColor = 'transparent';
+
+            startCountdown();
+
+        } else {
+            // --- SETUP TAB MODE ---
+            setupView.style.display = 'block';
+            timerView.style.display = 'none';
+
+            // 1. OPEN WIDGET LINK
+            document.getElementById('btn-open-widget').addEventListener('click', () => {
+                const currentUrl = window.location.href.split('?')[0];
+                window.open(currentUrl + '?mode=timer', '_blank');
+            });
+
+            // 2. SET FRESH STARTING TIME
+            document.getElementById('btn-start-fresh').addEventListener('click', () => {
+                const h = parseInt(document.getElementById('start-hours').value) || 0;
+                const m = parseInt(document.getElementById('start-minutes').value) || 0;
+                const s = parseInt(document.getElementById('start-seconds').value) || 0;
+
+                const totalMs = (h * 3600000) + (m * 60000) + (s * 1000);
+                const targetEndTime = Date.now() + totalMs;
+
+                localStorage.setItem('marathonTimer_endTime', targetEndTime);
+                alert("New base time set!");
+            });
+
+            // 3. ADD OR REDUCE TIME (BLUE BUTTON)
+            document.getElementById('btn-update-timer').addEventListener('click', () => {
+                let currentEndTime = parseInt(localStorage.getItem('marathonTimer_endTime'));
+
+                // If there is no timer running, pretend it's starting from zero right now
+                if (!currentEndTime || isNaN(currentEndTime) || currentEndTime < Date.now()) {
+                    currentEndTime = Date.now();
+                }
+
+                const action = document.getElementById('time-action').value;
+                const h = parseInt(document.getElementById('mod-hours').value) || 0;
+                const m = parseInt(document.getElementById('mod-minutes').value) || 0;
+                const s = parseInt(document.getElementById('mod-seconds').value) || 0;
+
+                const changeMs = (h * 3600000) + (m * 60000) + (s * 1000);
+
+                let newEndTime;
+                if (action === 'add') {
+                    newEndTime = currentEndTime + changeMs;
+                } else {
+                    newEndTime = currentEndTime - changeMs;
+                }
+
+                localStorage.setItem('marathonTimer_endTime', newEndTime);
+
+                // Reset inputs back to zero for convenience
+                document.getElementById('mod-hours').value = 0;
+                document.getElementById('mod-minutes').value = 0;
+                document.getElementById('mod-seconds').value = 0;
+            });
+        }
+
+        // --- TIMER DISPLAY LOGIC ---
+        function startCountdown() {
+            function update() {
+                const endTime = localStorage.getItem('marathonTimer_endTime');
+
+                if (!endTime) {
+                    display.innerText = "00:00:00";
+                    return;
+                }
+
+                const now = Date.now();
+                const remaining = parseInt(endTime) - now;
+
+                if (remaining <= 0) {
+                    display.innerText = "00:00:00";
+                    return;
+                }
+
+                const totalSeconds = Math.floor(remaining / 1000);
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+
+                const hStr = String(hours).padStart(2, '0');
+                const mStr = String(minutes).padStart(2, '0');
+                const sStr = String(seconds).padStart(2, '0');
+
+                display.innerText = `${hStr}:${mStr}:${sStr}`;
+            }
+
+            update();
+            timerInterval = setInterval(update, 1000);
+        }
+    </script>
+</body>
+</html>
