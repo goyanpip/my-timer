@@ -20,8 +20,17 @@
         .input-box input { width: 60px; height: 35px; border: 1px solid #e0e0e0; border-radius: 4px; text-align: center; font-family: 'Montserrat'; font-size: 14px; }
         .input-box label { margin-top: 5px; font-size: 10px; color: #999; text-transform: uppercase; }
         select { font-family: 'Montserrat'; padding: 5px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px; }
+        
         .btn-blue { background: #5a9bd4; color: white; border: none; border-radius: 4px; padding: 12px 40px; cursor: pointer; text-transform: uppercase; font-size: 11px; font-weight: 600; letter-spacing: 1px; transition: 0.2s; }
         .btn-blue:hover { background: #4a8bc4; }
+        
+        /* Stop/Start Button Styles */
+        .btn-toggle { border: none; border-radius: 4px; padding: 12px 25px; cursor: pointer; text-transform: uppercase; font-size: 11px; font-weight: 600; letter-spacing: 1px; color: white; margin-left: 10px; min-width: 120px; }
+        .btn-stop { background: #e74c3c; } /* Red */
+        .btn-stop:hover { background: #c0392b; }
+        .btn-start-green { background: #2ecc71; } /* Green */
+        .btn-start-green:hover { background: #27ae60; }
+
         .status-msg { font-size: 11px; color: #2ecc71; margin-top: 10px; height: 15px; font-weight: 600; }
         
         #timer-view { display: none; height: 100vh; justify-content: center; align-items: center; background: transparent; }
@@ -44,7 +53,7 @@
         <div class="input-box"><input type="number" id="m" value="0"><label>Minutes</label></div>
         <div class="input-box"><input type="number" id="s" value="0"><label>Seconds</label></div>
     </div>
-    <button class="btn-blue" id="btn-start">START NEW SESSION</button>
+    <button class="btn-blue" id="btn-start-session">START NEW SESSION</button>
     <div id="msg-start" class="status-msg"></div>
 
     <div class="section-title">MODIFIER (+ / -):</div>
@@ -54,7 +63,10 @@
         <div class="input-box"><input type="number" id="modm" value="0"><label>Minutes</label></div>
         <div class="input-box"><input type="number" id="mods" value="0"><label>Seconds</label></div>
     </div>
-    <button class="btn-blue" id="btn-update">UPDATE CLOUD TIMER</button>
+    <div style="display: flex; justify-content: center; align-items: center;">
+        <button class="btn-blue" id="btn-update">UPDATE CLOUD TIMER</button>
+        <button id="btn-toggle-timer" class="btn-toggle btn-stop">STOP TIMER</button>
+    </div>
     <div id="msg-update" class="status-msg"></div>
 </div>
 
@@ -78,7 +90,6 @@
     let params = new URLSearchParams(window.location.search);
     let timerId = params.get('id');
     
-    // Maintain a unique ID for this session
     if (!timerId) {
         timerId = Math.random().toString(36).substring(2, 10);
         window.history.replaceState({}, '', `?id=${timerId}`);
@@ -93,52 +104,107 @@
         document.body.style.background = 'transparent';
         
         timerRef.on('value', (snapshot) => {
-            const endTime = snapshot.val();
-            if (endTime) startCountdown(endTime);
+            const data = snapshot.val();
+            if (!data) return;
+            
+            // Handle both old format (number) and new format (object)
+            const endTime = typeof data === 'object' ? data.endTime : data;
+            const isPaused = typeof data === 'object' ? data.paused : false;
+            const remainingAtPause = typeof data === 'object' ? data.remaining : 0;
+
+            if (isPaused) {
+                displayFormattedTime(remainingAtPause);
+                if (window.itv) clearInterval(window.itv);
+            } else {
+                startCountdown(endTime);
+            }
         });
     } else {
+        const toggleBtn = document.getElementById('btn-toggle-timer');
+
         const showMsg = (id, text) => {
             const el = document.getElementById(id);
             el.innerText = text;
             setTimeout(() => el.innerText = "", 3000);
         };
 
-        document.getElementById('btn-start').onclick = () => {
+        // Watch cloud state to update button UI
+        timerRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && data.paused) {
+                toggleBtn.innerText = "START TIMER";
+                toggleBtn.className = "btn-toggle btn-start-green";
+            } else {
+                toggleBtn.innerText = "STOP TIMER";
+                toggleBtn.className = "btn-toggle btn-stop";
+            }
+        });
+
+        document.getElementById('btn-start-session').onclick = () => {
             const ms = (parseInt(document.getElementById('h').value)||0)*3600000 + 
                        (parseInt(document.getElementById('m').value)||0)*60000 + 
                        (parseInt(document.getElementById('s').value)||0)*1000;
-            timerRef.set(Date.now() + ms)
-                .then(() => showMsg("msg-start", "✓ Timer Reset Successfully!"))
-                .catch(err => alert("Error: " + err.message));
+            timerRef.set({ endTime: Date.now() + ms, paused: false, remaining: ms })
+                .then(() => showMsg("msg-start", "✓ Timer Reset Successfully!"));
         };
 
         document.getElementById('btn-update').onclick = () => {
             timerRef.once('value', (snapshot) => {
-                let current = snapshot.val();
-                if (!current || current < Date.now()) current = Date.now();
-                
-                const ms = (parseInt(document.getElementById('modh').value)||0)*3600000 + 
-                           (parseInt(document.getElementById('modm').value)||0)*60000 + 
-                           (parseInt(document.getElementById('mods').value)||0)*1000;
+                let data = snapshot.val();
+                let currentEnd = typeof data === 'object' ? data.endTime : data;
+                let paused = typeof data === 'object' ? data.paused : false;
+                let remaining = typeof data === 'object' ? data.remaining : 0;
+
+                const modMs = (parseInt(document.getElementById('modh').value)||0)*3600000 + 
+                              (parseInt(document.getElementById('modm').value)||0)*60000 + 
+                              (parseInt(document.getElementById('mods').value)||0)*1000;
                 
                 const action = document.getElementById('action').value;
-                const newTime = action === 'add' ? current + ms : current - ms;
                 
-                timerRef.set(newTime)
-                    .then(() => {
-                        showMsg("msg-update", "✓ Cloud Updated!");
-                        document.getElementById('modh').value = 0;
-                        document.getElementById('modm').value = 0;
-                        document.getElementById('mods').value = 0;
-                    });
+                if (paused) {
+                    let newRem = action === 'add' ? remaining + modMs : remaining - modMs;
+                    timerRef.update({ remaining: Math.max(0, newRem) });
+                } else {
+                    let newEnd = action === 'add' ? currentEnd + modMs : currentEnd - modMs;
+                    timerRef.update({ endTime: newEnd });
+                }
+                showMsg("msg-update", "✓ Cloud Updated!");
+            });
+        };
+
+        toggleBtn.onclick = () => {
+            timerRef.once('value', (snapshot) => {
+                const data = snapshot.val();
+                if (!data) return;
+
+                const isPaused = data.paused || false;
+                const now = Date.now();
+
+                if (!isPaused) {
+                    // STOPPING: Calculate remaining time and save it
+                    const remaining = data.endTime - now;
+                    timerRef.update({ paused: true, remaining: Math.max(0, remaining) });
+                } else {
+                    // STARTING: Take saved remaining time and set new endTime from NOW
+                    const newEnd = now + data.remaining;
+                    timerRef.update({ paused: false, endTime: newEnd });
+                }
             });
         };
 
         document.getElementById('copy-link').onclick = () => {
             const url = window.location.origin + window.location.pathname + `?id=${timerId}&mode=timer`;
             navigator.clipboard.writeText(url);
-            showMsg("msg-update", "✓ Link Copied to Clipboard!");
+            showMsg("msg-update", "✓ Link Copied!");
         };
+    }
+
+    function displayFormattedTime(ms) {
+        if (ms < 0) ms = 0;
+        const h = Math.floor(ms / 3600000).toString().padStart(2,'0');
+        const m = Math.floor((ms % 3600000) / 60000).toString().padStart(2,'0');
+        const s = Math.floor((ms % 60000) / 1000).toString().padStart(2,'0');
+        document.getElementById('countdown-display').innerText = `${h}:${m}:${s}`;
     }
 
     function startCountdown(endTime) {
@@ -147,12 +213,10 @@
             const rem = endTime - Date.now();
             if (rem <= 0) { 
                 document.getElementById('countdown-display').innerText = "00:00:00"; 
+                clearInterval(window.itv);
                 return; 
             }
-            const h = Math.floor(rem / 3600000).toString().padStart(2,'0');
-            const m = Math.floor((rem % 3600000) / 60000).toString().padStart(2,'0');
-            const s = Math.floor((rem % 60000) / 1000).toString().padStart(2,'0');
-            document.getElementById('countdown-display').innerText = `${h}:${m}:${s}`;
+            displayFormattedTime(rem);
         }, 1000);
     }
 </script>
