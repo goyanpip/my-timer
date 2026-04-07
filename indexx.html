@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Sync Marathon Timer (Fixed UI)</title>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap');
+
+        body { font-family: 'Montserrat', sans-serif; margin: 0; background: #333; color: #fff; }
+
+        #setup-view { max-width: 800px; margin: 0 auto; text-align: center; padding: 40px 20px; min-height: 100vh; display: flex; flex-direction: column; }
+        .main-content { flex: 1; }
+
+        .nav-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; margin-bottom: 40px; padding-bottom: 10px; }
+        .nav { display: flex; gap: 20px; list-style: none; padding: 0; margin: 0; }
+        .nav li { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #888; cursor: pointer; padding-bottom: 5px; }
+        .nav li.active { border-bottom: 3px solid #5a9bd4; color: #fff; }
+
+        .lang-select { background: #222; color: #f0ad4e; border: 1px solid #444; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+
+        .page-content { display: none; }
+        .page-content.active { display: block; }
+
+        .section-title { font-size: 14px; letter-spacing: 2px; color: #888; text-transform: uppercase; margin: 40px 0 20px; }
+        .input-group { display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; }
+        .input-box { display: flex; flex-direction: column; align-items: center; }
+        .input-box input { width: 70px; height: 45px; background: #222; border: 1px solid #444; border-radius: 6px; color: #fff; text-align: center; font-size: 18px; }
+        .input-box label { margin-top: 8px; font-size: 10px; color: #666; text-transform: uppercase; }
+
+        select { background: #222; color: #fff; border: 1px solid #444; padding: 10px 20px; border-radius: 6px; margin-bottom: 20px; width: 200px; }
+        .btn { border: none; border-radius: 6px; padding: 15px 30px; cursor: pointer; text-transform: uppercase; font-size: 13px; font-weight: 700; transition: 0.2s; }
+        .btn-blue { background: #6a96cc; color: white; }
+        .btn-stop { background: #d9534f; color: white; }
+        .btn-start-green { background: #5cb85c; color: white; }
+
+        /* 修正作者資訊位置 */
+        .info-panel { margin-top: 30px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px; font-size: 11px; color: #888; }
+        .info-panel a { color: #5a9bd4; text-decoration: none; }
+
+        /* 修正計時器重疊問題 */
+        #timer-view { display: none; height: 100vh; justify-content: center; align-items: center; background: transparent; overflow: hidden; }
+        .rolling-timer { display: flex; align-items: center; justify-content: center; font-size: 15vw; font-weight: 800; line-height: 1; width: 100%; }
+        .digit-slot { position: relative; height: 15vw; width: 0.68em; min-width: 0.6em; overflow: hidden; display: flex; justify-content: center; }
+        .digit { position: absolute; height: 100%; display: flex; align-items: center; justify-content: center; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s; font-variant-numeric: tabular-nums; }
+        .digit.current { transform: translateY(0); opacity: 1; }
+        .digit.exit { transform: translateY(100%); opacity: 0; }
+        .digit.enter { transform: translateY(-100%); opacity: 0; }
+        .separator { width: 0.3em; display: flex; justify-content: center; align-items: center; opacity: 0.4; }
+
+        .guide-box { text-align: left; background: #222; padding: 20px; border-radius: 10px; font-size: 14px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+<div id="setup-view">
+    <div class="main-content">
+        <div class="nav-container">
+            <ul class="nav">
+                <li id="nav-set" class="active" onclick="showPage('set')">CONTROLS</li>
+                <li id="nav-guide" onclick="showPage('guide')">HELP</li>
+                <li id="copy-link" style="color: #5a9bd4;">COPY SYNC LINK</li>
+            </ul>
+            <select id="lang-selector" class="lang-select">
+                <option value="zh">繁體中文</option>
+                <option value="en">English</option>
+            </select>
+        </div>
+
+        <div id="page-set" class="page-content active">
+            <div class="section-title" id="title-start">SET STARTING TIME:</div>
+            <div class="input-group">
+                <div class="input-box"><input type="number" id="d" value="0"><label class="lbl-d">Days</label></div>
+                <div class="input-box"><input type="number" id="h" value="15"><label class="lbl-h">Hours</label></div>
+                <div class="input-box"><input type="number" id="m" value="0"><label class="lbl-m">Minutes</label></div>
+                <div class="input-box"><input type="number" id="s" value="0"><label class="lbl-s">Seconds</label></div>
+            </div>
+            <button class="btn btn-blue" id="btn-start-session" style="width: 100%; max-width: 380px;">START NEW SESSION</button>
+
+            <div class="section-title" id="title-mod">MODIFIER (+ / -):</div>
+            <select id="action">
+                <option value="add" id="opt-add">Add Time (+)</option>
+                <option value="sub" id="opt-sub">Reduce Time (-)</option>
+            </select>
+            <div class="input-group">
+                <div class="input-box"><input type="number" id="modd" value="0"><label class="lbl-d">Days</label></div>
+                <div class="input-box"><input type="number" id="modh" value="0"><label class="lbl-h">Hours</label></div>
+                <div class="input-box"><input type="number" id="modm" value="0"><label class="lbl-m">Minutes</label></div>
+                <div class="input-box"><input type="number" id="mods" value="0"><label class="lbl-s">Seconds</label></div>
+            </div>
+            <div style="display: flex; justify-content: center; gap: 15px;">
+                <button class="btn btn-blue" id="btn-update">UPDATE CLOUD</button>
+                <button id="btn-toggle-timer" class="btn btn-stop">STOP TIMER</button>
+            </div>
+
+            <div class="info-panel">
+                <span id="txt-author">Authors: <a href="https://github.com/goyanpip/my-timer" target="_blank">果仁 (goyanpip)</a> & Gemini</span> |
+                <span id="txt-mod">Editor: 江北一 (YT_江北一)</span>
+            </div>
+        </div>
+
+        <div id="page-guide" class="page-content">
+            <div class="guide-box" id="guide-text"></div>
+        </div>
+    </div>
+</div>
+
+<div id="timer-view"><div class="rolling-timer" id="rolling-timer"></div></div>
+
+<script>
+    const i18n = {
+        en: {
+            navSet: "CONTROLS", navGuide: "HELP", copy: "COPY SYNC LINK",
+            titleStart: "SET STARTING TIME:", titleMod: "MODIFIER (+ / -):",
+            days: "Days", hours: "Hours", mins: "Minutes", secs: "Seconds",
+            btnNew: "START NEW SESSION", btnUpdate: "UPDATE CLOUD",
+            optAdd: "Add Time (+)", optSub: "Reduce Time (-)",
+            stop: "STOP TIMER", start: "START TIMER", alertCopy: "✅ Link Copied!",
+            author: "Authors: ", mod: "Editor: 江北一",
+            guide: `<h3>Guide</h3><p>1. Run <code>python -m http.server 8080</code><br>2. Add the Sync Link to OBS as a Browser Source (1920x1080).</p>`
+        },
+        zh: {
+            navSet: "控制面板", navGuide: "使用教學", copy: "複製同步連結",
+            titleStart: "設定初始時間：", titleMod: "增減時間修改器：",
+            days: "天", hours: "時", mins: "分", secs: "秒",
+            btnNew: "開啟新馬拉松", btnUpdate: "更新雲端時間",
+            optAdd: "增加時間 (+)", optSub: "減少時間 (-)",
+            stop: "停止計時", start: "開始計時", alertCopy: "✅ 同步連結已複製！",
+            author: "原作者：", mod: "修改者：江北一",
+            guide: `<h3>基礎架設</h3><p>1. 終端機輸入：<code>python -m http.server 8080</code><br>2. 在 OBS 新增「瀏覽器來源」，貼上連結並設為 1920x1080。</p>`
+        }
+    };
+
+    let currentLang = 'zh';
+
+    function setLanguage(lang) {
+        currentLang = lang;
+        const t = i18n[lang];
+        document.getElementById('nav-set').innerText = t.navSet;
+        document.getElementById('nav-guide').innerText = t.navGuide;
+        document.getElementById('copy-link').innerText = t.copy;
+        document.getElementById('title-start').innerText = t.titleStart;
+        document.getElementById('title-mod').innerText = t.titleMod;
+        document.querySelectorAll('.lbl-d').forEach(el => el.innerText = t.days);
+        document.querySelectorAll('.lbl-h').forEach(el => el.innerText = t.hours);
+        document.querySelectorAll('.lbl-m').forEach(el => el.innerText = t.mins);
+        document.querySelectorAll('.lbl-s').forEach(el => el.innerText = t.secs);
+        document.getElementById('btn-start-session').innerText = t.btnNew;
+        document.getElementById('btn-update').innerText = t.btnUpdate;
+        document.getElementById('opt-add').innerText = t.optAdd;
+        document.getElementById('opt-sub').innerText = t.optSub;
+        document.getElementById('guide-text').innerHTML = t.guide;
+        document.getElementById('txt-author').innerHTML = t.author + '<a href="https://github.com/goyanpip/my-timer" target="_blank">果仁 (goyanpip)</a> & Gemini';
+        document.getElementById('txt-mod').innerText = t.mod;
+    }
+
+    function showPage(pageId) {
+        document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav li').forEach(l => l.classList.remove('active'));
+        document.getElementById('page-' + pageId).classList.add('active');
+        document.getElementById('nav-' + pageId).classList.add('active');
+    }
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBrer3en-IZymx-r6g4choU8kfKkfeQdNY",
+        authDomain: "marathontimer.firebaseapp.com",
+        databaseURL: "https://marathontimer-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "marathontimer",
+        storageBucket: "marathontimer.firebasestorage.app",
+        messagingSenderId: "753172401546",
+        appId: "1:753172401546:web:8ccd5552daa22c274c0c73"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    let params = new URLSearchParams(window.location.search);
+    let timerId = params.get('id') || Math.random().toString(36).substring(2, 10);
+    const isWidget = params.get('mode') === 'timer';
+    const timerRef = db.ref('timers/' + timerId);
+
+    if (isWidget) {
+        document.getElementById('setup-view').style.display = 'none';
+        document.getElementById('timer-view').style.display = 'flex';
+        document.body.style.background = 'transparent';
+        timerRef.on('value', (s) => {
+            const data = s.val(); if(!data) return;
+            data.paused ? (updateDisplay(data.remaining), clearInterval(window.itv)) : startCountdown(data.endTime);
+        });
+    } else {
+        const toggleBtn = document.getElementById('btn-toggle-timer');
+        timerRef.on('value', (s) => {
+            const data = s.val();
+            if(data && data.paused) { toggleBtn.innerText = i18n[currentLang].start; toggleBtn.className = "btn btn-start-green"; }
+            else { toggleBtn.innerText = i18n[currentLang].stop; toggleBtn.className = "btn btn-stop"; }
+        });
+        document.getElementById('btn-start-session').onclick = () => {
+            const ms = (parseInt(document.getElementById('d').value)||0)*86400000 + (parseInt(document.getElementById('h').value)||0)*3600000 + (parseInt(document.getElementById('m').value)||0)*60000 + (parseInt(document.getElementById('s').value)||0)*1000;
+            timerRef.set({ endTime: Date.now() + ms, paused: false, remaining: ms });
+        };
+        document.getElementById('btn-update').onclick = () => {
+            timerRef.once('value', (s) => {
+                let d = s.val(); if(!d) return;
+                let mod = (parseInt(document.getElementById('modd').value)||0)*86400000 + (parseInt(document.getElementById('modh').value)||0)*3600000 + (parseInt(document.getElementById('modm').value)||0)*60000 + (parseInt(document.getElementById('mods').value)||0)*1000;
+                let action = document.getElementById('action').value;
+                if(d.paused) { timerRef.update({ remaining: Math.max(0, action==='add' ? d.remaining+mod : d.remaining-mod) }); }
+                else { timerRef.update({ endTime: action==='add' ? d.endTime+mod : d.endTime-mod }); }
+            });
+        };
+        toggleBtn.onclick = () => {
+            timerRef.once('value', (s) => {
+                const data = s.val(); if(!data) return;
+                data.paused ? timerRef.update({ paused:false, endTime: Date.now()+data.remaining }) : timerRef.update({ paused:true, remaining: Math.max(0, data.endTime-Date.now()) });
+            });
+        };
+        document.getElementById('copy-link').onclick = () => {
+            const syncLink = window.location.origin + window.location.pathname + `?id=${timerId}&mode=timer`;
+            navigator.clipboard.writeText(syncLink).then(() => alert(i18n[currentLang].alertCopy));
+        };
+    }
+
+    function updateDisplay(ms) {
+        if(ms < 0) ms = 0;
+        const d = Math.floor(ms/86400000);
+        const h = Math.floor((ms%86400000)/3600000).toString().padStart(2,'0');
+        const m = Math.floor((ms%3600000)/60000).toString().padStart(2,'0');
+        const s = Math.floor((ms%60000)/1000).toString().padStart(2,'0');
+        let fullStr = (d > 0 ? d + ":" : "") + h + ":" + m + ":" + s;
+        const container = document.getElementById('rolling-timer');
+        if(container.dataset.last === fullStr) return;
+        container.dataset.last = fullStr;
+        if(container.children.length !== fullStr.length) {
+            container.innerHTML = '';
+            [...fullStr].forEach(char => {
+                const slot = document.createElement('div');
+                if(char === ':') { slot.className = 'separator'; slot.innerText = ':'; }
+                else {
+                    slot.className = 'digit-slot';
+                    const digit = document.createElement('div');
+                    digit.className = 'digit current'; digit.innerText = char;
+                    slot.appendChild(digit);
+                }
+                container.appendChild(slot);
+            });
+            return;
+        }
+        [...fullStr].forEach((char, i) => {
+            if(char === ':') return;
+            const slot = container.children[i];
+            const currentDigit = slot.querySelector('.digit.current');
+            if (currentDigit && currentDigit.innerText !== char) {
+                currentDigit.className = 'digit exit';
+                const nextDigit = document.createElement('div');
+                nextDigit.className = 'digit enter'; nextDigit.innerText = char;
+                slot.appendChild(nextDigit);
+                setTimeout(() => { nextDigit.className = 'digit current'; }, 10);
+                setTimeout(() => { currentDigit.remove(); }, 600);
+            }
+        });
+    }
+
+    function startCountdown(endTime) {
+        if(window.itv) clearInterval(window.itv);
+        const tick = () => updateDisplay(endTime - Date.now());
+        tick(); window.itv = setInterval(tick, 1000);
+    }
+    setLanguage('zh');
+    document.getElementById('lang-selector').onchange = (e) => setLanguage(e.target.value);
+</script>
+</body>
+</html>
